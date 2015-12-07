@@ -1,0 +1,71 @@
+%simulate CAPM-SSAEPD-GARCH-Data
+
+
+clear all;
+clc;
+
+data1=xlsread('Germany.xlsx',1,'B2:C1551');
+data2=xlsread('Germany.xlsx',2,'B2:G1551');
+rmminusrf=data1(:,1);
+rf=data1(:,2);
+
+ri=data2(:,6);
+riminusrf=ri-rf;
+Y=riminusrf;
+
+X2=rmminusrf;
+
+n=size(X2,1);
+
+X1=ones([n,1]);
+
+X=[X1 X2];
+
+
+    
+
+
+% beta=nlinfit(XX,Y,@myfunnlin,beta0,'FunValCheck');
+% disp(beta);
+Spec=garchset('P',1,'Q',1,'C',0,'Regress',1.2,'K',0.00015,...
+    'Display','Off');
+[coeff,errors]=garchfit(Spec,Y,X2);
+garchdisp(coeff,errors);
+% disp(coeff);
+b0_0=garchget(coeff,'C');
+b1_0=garchget(coeff,'Regress');
+
+c0_0=garchget(coeff,'K');
+c1_0=garchget(coeff,'ARCH');
+c2_0=garchget(coeff,'GARCH');
+
+
+alpha_0=0.5;
+p1_0=2;
+p2_0=2;
+
+
+
+para0=[b0_0;b1_0;c0_0;c1_0;c2_0;alpha_0;p1_0;p2_0];
+
+% disp(b0);
+%nonlinear constraints c1_0+c2_0<1, alpha>0, alpha<1, p1>0, p2>0
+A=[0 0 0 1 1 0 0 0;0 0 0 -1 -1 0 0 0;... 
+   0 0 0 0 0 -1 0 0 ; 0 0 0 0 0 1 0 0 ;0 0 0 0 0 0 -1 0 ; 0 0 0 0 0 0 0 -1];
+b=[0.99999;-0.99999;-0.00001;0.99999;-0.000001;-0.00001];
+low_w1=[-100;-100;-100;0;0;0.5;2;2]; %low bounds for parameters
+up_w1=[100;100;100;1;1;0.5;2;2]; %upper bounds for parameters
+
+options=optimset('Algorithm','interior-point','Hessian','bfgs');
+
+[para,fval] = fmincon(@(para)myfunaepdgarch(para, Y , X),para0,A,b,[],[],low_w1,up_w1,[],options);
+
+
+disp([para]);
+
+disp(fval);
+aa(1,1)=fval;
+aic=16/n-2*(-fval)/n
+disp(aic)
+load gong
+sound(y,Fs);
