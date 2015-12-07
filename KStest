@@ -1,0 +1,99 @@
+%simulate CAPM-SSAEPD-GARCH
+
+clear all;
+clc;
+
+data1=xlsread('Germany.xlsx',1,'B2:C1572');
+data2=xlsread('Germany.xlsx',2,'B2:G1572');
+rmminusrf=data1(:,1);
+rf=data1(:,2);
+i=2;
+ri=data2(:,i);
+riminusrf=ri-rf;
+Y=riminusrf;
+
+X2=rmminusrf;
+
+n=size(X2,1);
+
+X1=ones([n,1]);
+
+X=[X1 X2];
+
+
+    
+
+
+% beta=nlinfit(XX,Y,@myfunnlin,beta0,'FunValCheck');
+% disp(beta);
+Spec=garchset('P',1,'Q',1,'C',0,'Regress',1.2,'K',0.00015,...
+    'Display','Off');
+[coeff,errors]=garchfit(Spec,Y,X2);
+% garchdisp(coeff,errors);
+% disp(coeff);
+b0_0=garchget(coeff,'C');
+b1_0=garchget(coeff,'Regress');
+c0_0=garchget(coeff,'K');
+c1_0=garchget(coeff,'ARCH');
+c2_0=garchget(coeff,'GARCH');
+
+
+alpha_0=.5;
+p1_0=2;
+p2_0=2;
+
+
+
+para0=[b0_0;b1_0;c0_0;c1_0;c2_0;alpha_0;p1_0;p2_0];
+
+% disp(b0);
+%nonlinear constraints c1_0+c2_0<1, alpha>0, alpha<1, p1>0, p2>0
+A=[0 0 0 1 1 0 0 0;... 
+   0 0 0 0 0 -1 0 0 ; 0 0 0 0 0 1 0 0 ;0 0 0 0 0 0 -1 0 ; 0 0 0 0 0 0 0 -1];
+b=[0.99999;-0.00001;0.99999;-0.000001;-0.00001];
+low_w1=[-100;-100;-100;0;0;0;0;0]; %low bounds for parameters
+up_w1=[100;100;100;1;1;1;100;100]; %upper bounds for parameters
+
+options=optimset('Algorithm','interior-point','Hessian','bfgs');
+
+[para,fval] = fmincon(@(para)myfunaepdgarch(para, Y , X),para0,A,b,[],[],low_w1,up_w1,[],options);
+
+% 
+% disp([para]);
+% 
+% disp(fval);
+
+eb0=para(1,1);
+eb1=para(2,1);
+ec0=para(3,1);
+ec1=para(4,1);
+ec2=para(5,1);
+ealpha=para(6,1);
+ep1=para(7,1);
+ep2=para(8,1);
+
+sigmat(1,1)=ec0+ec2;
+ut=Y-eb0*X1-eb1*X2;
+for i=1:n-1
+sigmat(i+1,1)=sqrt(ec0+ec1*ut(i,1)^2+ec2*sigmat(i,1)^2);
+end
+
+varepsilont=ut./sigmat;
+et=varepsilont;
+e=sort(et);
+v=Strandaepd(ep1,ep2,ealpha,n);
+c=100*sort(v);
+%
+v_cdf=aepdcdf(c,ep1,ep2,ealpha,0,1);
+
+ e_aepd=E_aepd(ealpha,ep1,ep2);
+ var_aepd=Var_aepd(ealpha,ep1,ep2);
+ 
+ E=e*sqrt(var_aepd)+e_aepd;
+ 
+[h1,p1]=kstest(E,[c,v_cdf],0.05,1);
+[h2,p2] = jbtest(E,0.05);
+
+R=[h1,p1,h2,p2];
+
+disp(R);
